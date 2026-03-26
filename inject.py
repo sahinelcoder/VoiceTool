@@ -40,15 +40,19 @@ def _accessibility_inject(text: str) -> bool:
             kAXFocusedUIElementAttribute,
             kAXValueAttribute,
         )
+        from ApplicationServices import (
+            AXUIElementCopyAttributeValue,
+            AXUIElementSetAttributeValue,
+        )
 
         system_wide = AXUIElementCreateSystemWide()
-        err, focused = system_wide.copyAttributeValue_value_(kAXFocusedUIElementAttribute, None)
+        err, focused = AXUIElementCopyAttributeValue(system_wide, kAXFocusedUIElementAttribute, None)
 
         if err != 0 or focused is None:
             logger.debug("Kein fokussiertes UI-Element gefunden (error: %d)", err)
             return False
 
-        err = focused.setAttributeValue_value_(kAXValueAttribute, text)
+        err = AXUIElementSetAttributeValue(focused, kAXValueAttribute, text)
         if err != 0:
             logger.debug("Konnte Wert nicht setzen (error: %d)", err)
             return False

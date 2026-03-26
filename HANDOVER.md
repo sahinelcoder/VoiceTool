@@ -8,53 +8,46 @@
 
 | Bereich | Status |
 |---|---|
-| Python-Backend | Alle Module implementiert, 29/29 Tests grün |
+| Python-Backend | Alle Module implementiert, manuell getestet, funktioniert |
 | Landing Page | `web/` — Next.js + Tailwind, Build erfolgreich |
-| Git | Repo initialisiert, noch **kein erster Commit** |
-| Manueller Test | Noch nicht durchgeführt |
+| Git | Initial Commit + Bugfixes committed |
+| GitHub | **https://github.com/sahinelcoder/VoiceTool** (public) |
+| Manueller Test | Erfolgreich — Recording, Transkription, Claude API, Clipboard-Injection funktionieren |
 
-## Erledigte Arbeit
+## Was diese Session erledigt wurde
 
-### Python-Module (alle fertig + getestet)
-- `audio.py` — AudioRecorder (sounddevice, threadsafe, start/stop)
-- `transcribe.py` — Transcriber (mlx-whisper, whisper-small-mlx)
-- `context.py` — get_active_app_name (pyobjc/NSWorkspace)
-- `inject.py` — Accessibility API + Clipboard-Fallback (erkennt Electron-Apps)
-- `postprocess.py` — Claude Haiku API, Fallback auf Rohtext bei Fehler
-- `main.py` — Hotkey-Listener (pynput), orchestriert den Flow
-- `tests/` — Unit Tests für alle Module (pytest + pytest-mock)
-
-### Infrastruktur
-- Python 3.12 via Homebrew, venv in `.venv/`
-- `requirements.txt`, `.gitignore`, `config.yaml`, `config.example.yaml`
-- Hotkey ist **F5** (fn nicht abfangbar via pynput)
-
-### Landing Page (`web/`)
-- Next.js 16 + Tailwind, Static Export (`output: "export"`)
-- Sections: Hero, Features, How it works, Requirements, Footer
-- Dunkles Design, blauer Akzent, macOS-Ästhetik
+- **Initial Commit** erstellt und auf GitHub gepusht
+- **GitHub CLI** (`gh`) installiert und Repo angelegt
+- **Bugfix `main.py`**: `pynput`-Import war falsch platziert → `UnboundLocalError` behoben
+- **Bugfix `inject.py`**: Accessibility API nutzte falsche ObjC-Methoden → auf C-Funktionen (`AXUIElementCopyAttributeValue`/`AXUIElementSetAttributeValue`) umgestellt
+- **Bugfix `config.yaml`**: Zeilenumbruch im API-Key entfernt
+- **Manueller Test** erfolgreich: Voller Flow (F5 → Recording → Transkription 0.57s → Claude API Post-Processing → Clipboard-Injection)
+- **macOS Permissions** gesetzt (Mikrofon + Bedienungshilfen)
 
 ## Offene Aufgaben (nächste Session)
 
-1. **Erster Commit** erstellen (alles stagen, sinnvolle Message)
-2. **Manueller Test** der Python-App:
-   - API-Key in `config.yaml` eintragen
-   - macOS Permissions setzen (Mikrofon + Bedienungshilfen)
-   - `python main.py` starten, F5 testen
-   - Siehe Checkliste: `.claude/plans/keen-forging-eclipse.md`
-3. **GitHub Repo** anlegen + pushen
+1. **Hotkey ändern**: F5 ist unpraktisch → **Pfeiltaste Links + Rechts gleichzeitig** als neuer Hotkey
+   - `main.py`: `_key_matches` und Listener-Logik anpassen für Combo-Key
+   - `config.yaml` / `config.example.yaml` aktualisieren
+2. **Recording-Animation**: Visuelles Feedback während Aufnahme läuft
+   - Progressbar/Overlay auf dem Bildschirm anzeigen solange aufgenommen wird
+   - Vermutlich pyobjc/AppKit NSWindow als transparentes Overlay
+3. **Accessibility-Injection testen** — Permissions wurden erteilt, aber noch nicht verifiziert ob es jetzt ohne Clipboard-Fallback klappt
 4. **Landing Page** reviewen und ggf. anpassen
 5. **Vercel Deploy** einrichten
+6. **Bugfix-Commit** erstellen und pushen (main.py, inject.py Fixes noch uncommitted)
 
 ## Entscheidungen
 
 | Entscheidung | Gewählt | Grund |
 |---|---|---|
-| Hotkey | F5 | fn nicht abfangbar via pynput |
+| Hotkey | F5 (wird geändert) | fn nicht abfangbar via pynput, F5 unpraktisch |
+| Neuer Hotkey | Pfeiltaste Links + Rechts | User-Wahl, ergonomischer |
 | Whisper-Modell | whisper-small-mlx | Schnelleres Prototyping |
 | Python | 3.12 via Homebrew | System-Python war 3.9.6 |
 | Frontend | Next.js + Tailwind | User-Wahl, Vercel-Deploy |
 | Post-Processing | Claude Haiku 4.5 | Schnell + günstig |
+| Text-Injection | Clipboard-Fallback als Default | Accessibility API instabil bei manchen Apps |
 
 ## Dateistruktur
 

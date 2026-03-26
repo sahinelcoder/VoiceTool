@@ -8,6 +8,8 @@ from pathlib import Path
 
 import yaml
 
+from pynput import keyboard
+
 from audio import AudioRecorder
 from context import get_active_app_name
 from inject import inject_text
@@ -106,8 +108,6 @@ def main() -> None:
     recorder = AudioRecorder()
 
     # Hotkey-Listener
-    from pynput import keyboard
-
     hotkey_str = config.get("hotkey", "fn")
     logger.info("Hotkey: '%s' — drücken zum Aufnehmen, loslassen zum Stoppen", hotkey_str)
 
@@ -150,14 +150,9 @@ def _key_matches(key: object, hotkey: str) -> bool:
         "right_ctrl": [keyboard.Key.ctrl_r],
     }
 
-    from pynput import keyboard
-
     targets = key_mapping.get(hotkey.lower(), [])
     return key in targets
 
-
-# pynput import für Type Hints
-from pynput import keyboard  # noqa: E402
 
 if __name__ == "__main__":
     main()
