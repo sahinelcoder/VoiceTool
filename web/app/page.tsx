@@ -47,7 +47,7 @@ export default function Home() {
               Mehr erfahren
             </a>
             <a
-              href="https://github.com"
+              href="https://github.com/sahinelcoder/VoiceTool"
               className="inline-flex items-center justify-center h-12 px-8 rounded-full border border-card-border text-foreground font-medium transition-colors hover:bg-card"
             >
               <svg
@@ -138,7 +138,7 @@ export default function Home() {
             <Step
               number="1"
               title="Hotkey halten"
-              description="Drücke die konfigurierte Taste und sprich los. Kein Fenster, kein Klick nötig."
+              description="Drücke beide Pfeiltasten gleichzeitig und sprich los. Kein Fenster, kein Klick nötig."
             />
             <Step
               number="2"
@@ -178,7 +178,7 @@ export default function Home() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted">
           <span>VoiceTool — Voice-Dictation für macOS</span>
           <div className="flex items-center gap-6">
-            <a href="https://github.com" className="hover:text-foreground transition-colors">
+            <a href="https://github.com/sahinelcoder/VoiceTool" className="hover:text-foreground transition-colors">
               GitHub
             </a>
             <span>MIT License</span>
