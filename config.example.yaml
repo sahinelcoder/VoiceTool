@@ -1,4 +1,4 @@
-hotkey: "fn"
+hotkey: "arrow_combo"
 model: "mlx-community/whisper-small-mlx"
 language: "auto"
 claude_api_key: "sk-ant-..."

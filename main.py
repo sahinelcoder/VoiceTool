@@ -13,6 +13,7 @@ from pynput import keyboard
 from audio import AudioRecorder
 from context import get_active_app_name
 from inject import inject_text
+from overlay import RecordingOverlay
 from postprocess import postprocess
 from transcribe import Transcriber
 
@@ -106,20 +107,49 @@ def main() -> None:
     transcriber.load_model()
 
     recorder = AudioRecorder()
+    overlay = RecordingOverlay()
 
     # Hotkey-Listener
-    hotkey_str = config.get("hotkey", "fn")
-    logger.info("Hotkey: '%s' — drücken zum Aufnehmen, loslassen zum Stoppen", hotkey_str)
+    hotkey_str = config.get("hotkey", "arrow_combo")
+    pressed_keys: set = set()
+
+    if hotkey_str == "arrow_combo":
+        logger.info("Hotkey: Pfeiltaste Links + Rechts gleichzeitig — halten zum Aufnehmen")
+    else:
+        logger.info("Hotkey: '%s' — drücken zum Aufnehmen, loslassen zum Stoppen", hotkey_str)
 
     def on_press(key: keyboard.Key | keyboard.KeyCode) -> None:
         """Startet Recording bei Hotkey-Press."""
-        if _key_matches(key, hotkey_str) and not recorder.is_recording:
+        if hotkey_str == "arrow_combo":
+            if key in (keyboard.Key.left, keyboard.Key.right):
+                pressed_keys.add(key)
+                if (
+                    keyboard.Key.left in pressed_keys
+                    and keyboard.Key.right in pressed_keys
+                    and not recorder.is_recording
+                ):
+                    logger.info("Combo erkannt — starte Aufnahme")
+                    recorder.start()
+                    overlay.show()
+        elif _key_matches(key, hotkey_str) and not recorder.is_recording:
             recorder.start()
+            overlay.show()
 
     def on_release(key: keyboard.Key | keyboard.KeyCode) -> None:
         """Stoppt Recording bei Hotkey-Release und verarbeitet Audio."""
-        if _key_matches(key, hotkey_str) and recorder.is_recording:
-            # Processing in separatem Thread um Listener nicht zu blockieren
+        if hotkey_str == "arrow_combo":
+            if key in (keyboard.Key.left, keyboard.Key.right):
+                pressed_keys.discard(key)
+                if recorder.is_recording:
+                    logger.info("Taste losgelassen — stoppe Aufnahme")
+                    overlay.hide()
+                    threading.Thread(
+                        target=process_audio,
+                        args=(recorder, transcriber, config),
+                        daemon=True,
+                    ).start()
+        elif _key_matches(key, hotkey_str) and recorder.is_recording:
+            overlay.hide()
             threading.Thread(
                 target=process_audio,
                 args=(recorder, transcriber, config),
@@ -142,16 +172,12 @@ def main() -> None:
 def _key_matches(key: object, hotkey: str) -> bool:
     """Prüft ob der gedrückte Key dem konfigurierten Hotkey entspricht."""
     key_mapping: dict[str, list] = {
-        "fn": [keyboard.Key.f5],  # fn direkt nicht abfangbar, F5 als Default
         "f5": [keyboard.Key.f5],
         "f6": [keyboard.Key.f6],
         "right_cmd": [keyboard.Key.cmd_r],
         "right_alt": [keyboard.Key.alt_r],
         "right_ctrl": [keyboard.Key.ctrl_r],
     }
-
-    targets = key_mapping.get(hotkey.lower(), [])
-    return key in targets
 
 
 if __name__ == "__main__":
