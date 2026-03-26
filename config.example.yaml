@@ -1,0 +1,8 @@
+hotkey: "fn"
+model: "mlx-community/whisper-small-mlx"
+language: "auto"
+claude_api_key: "sk-ant-..."
+post_processing: true
+clipboard_fallback: true
+startup_sound: false
+debug: false

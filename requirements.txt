@@ -1,0 +1,10 @@
+mlx-whisper
+sounddevice
+numpy
+pynput
+pyobjc-framework-Cocoa
+pyobjc-framework-ApplicationServices
+anthropic
+pyyaml
+pytest
+pytest-mock
