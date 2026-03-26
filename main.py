@@ -159,14 +159,24 @@ def main() -> None:
     # Graceful Shutdown
     def signal_handler(sig: int, frame: object) -> None:
         logger.info("VoiceTool beendet")
+        from PyObjCTools import AppHelper
+        AppHelper.stopEventLoop()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-        logger.info("VoiceTool bereit — warte auf Hotkey")
-        listener.join()
+    # pynput Listener im Background starten
+    listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+    listener.start()
+    logger.info("VoiceTool bereit — warte auf Hotkey")
+
+    # AppKit Event Loop auf Main Thread (nötig für Overlay-Fenster)
+    from AppKit import NSApplication
+    from PyObjCTools import AppHelper
+
+    NSApplication.sharedApplication()
+    AppHelper.runEventLoop(installInterrupt=True)
 
 
 def _key_matches(key: object, hotkey: str) -> bool:
