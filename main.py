@@ -5,6 +5,7 @@ import signal
 import sys
 import threading
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
@@ -35,12 +36,12 @@ from Quartz import (
     kCFRunLoopCommonModes,
 )
 
-from audio import AudioRecorder
+from audio import AudioRecorder, CHUNK_INTERVAL
 from context import get_active_app_name
 from inject import inject_text
 from overlay import RecordingOverlay
 from postprocess import postprocess
-from transcribe import Transcriber
+from transcribe import StreamingTranscriber, Transcriber
 
 logger = logging.getLogger(__name__)
 
@@ -68,29 +69,19 @@ def setup_logging(debug: bool = False) -> None:
 def process_audio(
     recorder: AudioRecorder,
     transcriber: Transcriber,
+    streaming: StreamingTranscriber,
     config: dict,
+    app_name: str,
 ) -> None:
-    """Verarbeitet aufgenommenes Audio: Transkription → Post-Processing → Injection."""
-    import numpy as np
+    """Verarbeitet aufgenommenes Audio: finaler Chunk + Zusammenfügen → Post-Processing → Injection."""
+    # Letzten Rest-Chunk holen
+    final_audio = recorder.stop()
+    if final_audio.size > 0:
+        streaming.submit_chunk(final_audio)
+        del final_audio
 
-    audio = recorder.stop()
-
-    if audio.size == 0:
-        logger.warning("Leere Aufnahme, überspringe")
-        return
-
-    # App-Name im Main Thread auslesen (pyobjc-Anforderung)
-    app_name = get_active_app_name()
-
-    # Transkription
-    try:
-        raw_text = transcriber.transcribe(audio)
-    except RuntimeError as e:
-        logger.error("Transkription fehlgeschlagen: %s", e)
-        return
-    finally:
-        # Audio-Buffer sofort löschen (Datenschutz)
-        del audio
+    # Alle Teilergebnisse zusammenfügen
+    raw_text = streaming.finalize()
 
     if not raw_text.strip():
         logger.info("Kein Text erkannt")
@@ -234,6 +225,22 @@ def main() -> None:
     overlay = RecordingOverlay()
     status_bar = StatusBarController()
 
+    # Streaming-Transkription State
+    streaming: list[Optional[StreamingTranscriber]] = [None]  # Mutable container für Closures
+    chunk_timer: list[Optional[threading.Timer]] = [None]
+
+    def _drain_and_submit():
+        """Draint einen Chunk und plant den nächsten Timer."""
+        if recorder.is_recording and streaming[0] is not None:
+            chunk = recorder.drain_chunk()
+            if chunk.size > 0:
+                streaming[0].submit_chunk(chunk)
+                logger.info("Chunk zur Transkription übergeben")
+            # Nächsten Timer planen
+            chunk_timer[0] = threading.Timer(CHUNK_INTERVAL, _drain_and_submit)
+            chunk_timer[0].daemon = True
+            chunk_timer[0].start()
+
     # Hotkey-Listener
     hotkey_str = config.get("hotkey", "fn")
     pressed_keys: set = set()
@@ -241,18 +248,33 @@ def main() -> None:
     def _start_recording():
         if not recorder.is_recording:
             logger.info("Starte Aufnahme")
+            # StreamingTranscriber starten
+            streaming[0] = StreamingTranscriber(transcriber)
+            streaming[0].start()
             recorder.start()
             overlay.show()
             status_bar.set_recording(True)
+            # Erster Chunk-Timer
+            chunk_timer[0] = threading.Timer(CHUNK_INTERVAL, _drain_and_submit)
+            chunk_timer[0].daemon = True
+            chunk_timer[0].start()
 
     def _stop_recording():
         if recorder.is_recording:
             logger.info("Stoppe Aufnahme")
+            # Timer stoppen
+            if chunk_timer[0] is not None:
+                chunk_timer[0].cancel()
+                chunk_timer[0] = None
             overlay.hide()
             status_bar.set_recording(False)
+            # App-Name im Main Thread auslesen (pyobjc-Anforderung)
+            app_name = get_active_app_name()
+            current_streaming = streaming[0]
+            streaming[0] = None
             threading.Thread(
                 target=process_audio,
-                args=(recorder, transcriber, config),
+                args=(recorder, transcriber, current_streaming, config, app_name),
                 daemon=True,
             ).start()
 

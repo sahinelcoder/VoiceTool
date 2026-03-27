@@ -13,6 +13,8 @@ SAMPLE_RATE = 16000
 CHANNELS = 1
 DTYPE = "float32"
 BLOCKSIZE = 1024
+CHUNK_INTERVAL = 30  # Sekunden zwischen Chunk-Drains
+OVERLAP_SECONDS = 2  # Overlap gegen abgeschnittene Wörter
 
 
 class AudioRecorder:
@@ -72,6 +74,30 @@ class AudioRecorder:
         audio = np.concatenate(self._chunks, axis=0).flatten()
         self._chunks = []
         logger.info("Recording gestoppt, %d Samples (%.1fs)", len(audio), len(audio) / self._sample_rate)
+        return audio
+
+    def drain_chunk(self) -> np.ndarray:
+        """Gibt den bisherigen Audio-Buffer zurück und behält OVERLAP_SECONDS als Overlap.
+
+        Wird während der Aufnahme aufgerufen, damit Chunks im Hintergrund
+        transkribiert werden können, ohne die Aufnahme zu unterbrechen.
+        """
+        with self._lock:
+            if not self._recording or not self._chunks:
+                return np.array([], dtype=DTYPE)
+
+            audio = np.concatenate(self._chunks, axis=0).flatten()
+            overlap_samples = self._sample_rate * OVERLAP_SECONDS
+
+            # Overlap-Samples behalten für den nächsten Chunk
+            if len(audio) > overlap_samples:
+                self._chunks = [audio[-overlap_samples:].copy().reshape(-1, 1)]
+            else:
+                # Zu kurz für Drain, nichts zurückgeben
+                return np.array([], dtype=DTYPE)
+
+        logger.debug("Chunk drained: %d Samples (%.1fs), Overlap: %d Samples",
+                      len(audio), len(audio) / self._sample_rate, overlap_samples)
         return audio
 
     @property
