@@ -38,7 +38,7 @@ def _accessibility_inject(text: str) -> bool:
         from ApplicationServices import (
             AXUIElementCreateSystemWide,
             kAXFocusedUIElementAttribute,
-            kAXValueAttribute,
+            kAXSelectedTextAttribute,
         )
         from ApplicationServices import (
             AXUIElementCopyAttributeValue,
@@ -52,9 +52,10 @@ def _accessibility_inject(text: str) -> bool:
             logger.debug("Kein fokussiertes UI-Element gefunden (error: %d)", err)
             return False
 
-        err = AXUIElementSetAttributeValue(focused, kAXValueAttribute, text)
+        # kAXSelectedTextAttribute ersetzt nur die aktuelle Selektion (bzw. fügt am Cursor ein)
+        err = AXUIElementSetAttributeValue(focused, kAXSelectedTextAttribute, text)
         if err != 0:
-            logger.debug("Konnte Wert nicht setzen (error: %d)", err)
+            logger.debug("Konnte Text nicht am Cursor einfügen (error: %d)", err)
             return False
 
         logger.info("Text via Accessibility API injiziert")

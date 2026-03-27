@@ -1,5 +1,7 @@
-"""Recording-Overlay — zeigt visuelles Feedback während der Aufnahme."""
+"""Recording-Overlay — Waveform-Visualizer über dem Dock."""
 
+import logging
+import random
 import threading
 import time
 
@@ -17,74 +19,112 @@ from AppKit import (
 )
 import objc
 
+logger = logging.getLogger(__name__)
 
-# Konstanten
-PILL_WIDTH = 120
-PILL_HEIGHT = 36
-PILL_CORNER_RADIUS = 18
-DOT_RADIUS = 5
-ANIMATION_INTERVAL = 0.5
+# Layout
+PILL_WIDTH = 200
+PILL_HEIGHT = 48
+PILL_CORNER_RADIUS = 24
+BAR_COUNT = 24
+BAR_WIDTH = 3
+BAR_GAP = 2.5
+BAR_MIN_HEIGHT = 3
+BAR_MAX_HEIGHT = 28
+DOCK_OFFSET = 80
+ANIMATION_FPS = 30
+
+# Shared audio level — wird direkt vom AudioRecorder geschrieben
+_shared_level = 0.0
+_shared_lock = threading.Lock()
 
 
-class RecordingDotView(NSView):
-    """Custom View: rote pulsierende Dot + "Recording" Text."""
+def set_shared_level(level: float) -> None:
+    global _shared_level
+    _shared_level = level
+
+
+def get_shared_level() -> float:
+    return _shared_level
+
+
+class WaveformView(NSView):
+    """Custom View: Waveform-Bars die auf Audio-Level reagieren."""
 
     def initWithFrame_(self, frame):
-        self = objc.super(RecordingDotView, self).initWithFrame_(frame)
+        self = objc.super(WaveformView, self).initWithFrame_(frame)
         if self is None:
             return None
-        self._dot_visible = True
+        self._bar_heights = [BAR_MIN_HEIGHT] * BAR_COUNT
+        self._target_heights = [BAR_MIN_HEIGHT] * BAR_COUNT
+        self._phase = 0
         return self
 
+    def updateLevel(self):
+        """Liest shared level und berechnet neue Ziel-Höhen."""
+        level = get_shared_level()
+        self._phase += 1
+
+        for i in range(BAR_COUNT):
+            center_factor = 1.0 - abs(i - BAR_COUNT / 2) / (BAR_COUNT / 2)
+            center_factor = center_factor ** 0.6
+            variation = random.uniform(0.5, 1.0)
+            target = BAR_MIN_HEIGHT + (BAR_MAX_HEIGHT - BAR_MIN_HEIGHT) * level * center_factor * variation
+            self._target_heights[i] = max(BAR_MIN_HEIGHT, target)
+
+        # Smooth interpolation
+        smoothing = 0.35
+        for i in range(BAR_COUNT):
+            self._bar_heights[i] += (self._target_heights[i] - self._bar_heights[i]) * smoothing
+
+        self.setNeedsDisplay_(True)
+
     def drawRect_(self, rect):
-        # Hintergrund: dunkle Pill
-        bg = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.1, 0.1, 0.1, 0.85)
+        # Hintergrund
+        bg = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.08, 0.08, 0.10, 0.92)
         bg.setFill()
-        path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+        pill = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
             self.bounds(), PILL_CORNER_RADIUS, PILL_CORNER_RADIUS
         )
-        path.fill()
+        pill.fill()
 
-        # Roter Dot (pulsiert)
-        if self._dot_visible:
-            dot_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(1.0, 0.2, 0.2, 1.0)
-        else:
-            dot_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(0.5, 0.1, 0.1, 0.6)
-        dot_color.setFill()
-        dot_rect = NSMakeRect(14, (PILL_HEIGHT - DOT_RADIUS * 2) / 2, DOT_RADIUS * 2, DOT_RADIUS * 2)
-        dot_path = NSBezierPath.bezierPathWithOvalInRect_(dot_rect)
-        dot_path.fill()
+        # Subtiler Border
+        border_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(1.0, 1.0, 1.0, 0.08)
+        border_color.setStroke()
+        pill.setLineWidth_(0.5)
+        pill.stroke()
 
-        # Text
-        text_color = NSColor.whiteColor()
-        text_color.set()
-        font = NSFont.systemFontOfSize_(13)
-        attrs = {
-            "NSFontAttributeName": font,
-            "NSForegroundColorAttributeName": text_color,
-        }
-        from Foundation import NSString, NSMakePoint
+        # Waveform-Bars
+        total_bars_width = BAR_COUNT * BAR_WIDTH + (BAR_COUNT - 1) * BAR_GAP
+        start_x = (PILL_WIDTH - total_bars_width) / 2
+        center_y = PILL_HEIGHT / 2
 
-        text = NSString.stringWithString_("Recording")
-        text.drawAtPoint_withAttributes_(NSMakePoint(32, 10), attrs)
+        for i in range(BAR_COUNT):
+            h = self._bar_heights[i]
+            x = start_x + i * (BAR_WIDTH + BAR_GAP)
+            y = center_y - h / 2
 
-    def toggle_dot(self):
-        self._dot_visible = not self._dot_visible
-        self.setNeedsDisplay_(True)
+            intensity = 0.3 + 0.7 * ((h - BAR_MIN_HEIGHT) / max(1, BAR_MAX_HEIGHT - BAR_MIN_HEIGHT))
+            bar_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(1.0, 1.0, 1.0, intensity)
+            bar_color.setFill()
+
+            bar_rect = NSMakeRect(x, y, BAR_WIDTH, h)
+            bar_path = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+                bar_rect, BAR_WIDTH / 2, BAR_WIDTH / 2
+            )
+            bar_path.fill()
 
 
 class RecordingOverlay:
-    """Verwaltet das Recording-Overlay-Fenster."""
+    """Verwaltet das Recording-Overlay-Fenster über dem Dock."""
 
     def __init__(self):
         self._window = None
         self._view = None
-        self._animation_thread = None
+        self._timer = None
         self._running = False
 
     def show(self):
-        """Zeigt das Overlay an (muss vom Main Thread aufgerufen werden oder via performSelectorOnMainThread)."""
-        from Foundation import NSObject
+        """Zeigt das Overlay an."""
 
         def _create_on_main():
             screen = NSScreen.mainScreen()
@@ -92,9 +132,8 @@ class RecordingOverlay:
                 return
             screen_frame = screen.frame()
 
-            # Oben-mittig positionieren
             x = (screen_frame.size.width - PILL_WIDTH) / 2
-            y = screen_frame.size.height - PILL_HEIGHT - 60  # 60px vom oberen Rand
+            y = DOCK_OFFSET
 
             window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
                 NSMakeRect(x, y, PILL_WIDTH, PILL_HEIGHT),
@@ -102,36 +141,50 @@ class RecordingOverlay:
                 NSBackingStoreBuffered,
                 False,
             )
-            window.setLevel_(25)  # NSStatusWindowLevel
+            window.setLevel_(25)
             window.setOpaque_(False)
             window.setBackgroundColor_(NSColor.clearColor())
             window.setIgnoresMouseEvents_(True)
-            window.setCollectionBehavior_(1 << 4)  # NSWindowCollectionBehaviorCanJoinAllSpaces
+            window.setCollectionBehavior_(1 << 4)
+            window.setHasShadow_(True)
 
-            view = RecordingDotView.alloc().initWithFrame_(NSMakeRect(0, 0, PILL_WIDTH, PILL_HEIGHT))
+            view = WaveformView.alloc().initWithFrame_(
+                NSMakeRect(0, 0, PILL_WIDTH, PILL_HEIGHT)
+            )
             window.setContentView_(view)
             window.orderFrontRegardless()
 
             self._window = window
             self._view = view
+            self._running = True
 
-        # Auf Main Thread ausführen
+            # NSTimer auf dem Main Thread Run Loop für garantierte UI-Updates
+            from Foundation import NSTimer, NSRunLoop, NSDefaultRunLoopMode
+            self._timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                1.0 / ANIMATION_FPS,
+                view,
+                objc.selector(WaveformView.updateLevel, signature=b"v@:@"),
+                None,
+                True,
+            )
+            NSRunLoop.currentRunLoop().addTimer_forMode_(self._timer, NSDefaultRunLoopMode)
+            logger.info("Overlay angezeigt + Timer gestartet")
+
         if threading.current_thread() is threading.main_thread():
             _create_on_main()
         else:
             from PyObjCTools import AppHelper
             AppHelper.callAfter(_create_on_main)
 
-        # Animation starten
-        self._running = True
-        self._animation_thread = threading.Thread(target=self._animate, daemon=True)
-        self._animation_thread.start()
-
     def hide(self):
         """Versteckt das Overlay."""
         self._running = False
+        set_shared_level(0.0)
 
         def _close_on_main():
+            if self._timer is not None:
+                self._timer.invalidate()
+                self._timer = None
             if self._window is not None:
                 self._window.orderOut_(None)
                 self._window = None
@@ -142,11 +195,3 @@ class RecordingOverlay:
         else:
             from PyObjCTools import AppHelper
             AppHelper.callAfter(_close_on_main)
-
-    def _animate(self):
-        """Pulsiert den roten Dot."""
-        while self._running and self._view is not None:
-            time.sleep(ANIMATION_INTERVAL)
-            if self._view is not None and self._running:
-                from PyObjCTools import AppHelper
-                AppHelper.callAfter(self._view.toggle_dot)

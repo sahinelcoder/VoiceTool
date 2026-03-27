@@ -24,6 +24,7 @@ class AudioRecorder:
         self._stream: Optional[sd.InputStream] = None
         self._lock = threading.Lock()
         self._recording = False
+        self._current_level: float = 0.0
 
     def start(self) -> None:
         """Startet die Aufnahme in einem eigenen Stream."""
@@ -78,6 +79,11 @@ class AudioRecorder:
         """Gibt zurück ob gerade aufgenommen wird."""
         return self._recording
 
+    @property
+    def current_level(self) -> float:
+        """Gibt den aktuellen Audio-Pegel zurück (0.0 bis 1.0)."""
+        return self._current_level
+
     def _audio_callback(
         self,
         indata: np.ndarray,
@@ -90,3 +96,8 @@ class AudioRecorder:
             logger.warning("Audio callback status: %s", status)
         if self._recording:
             self._chunks.append(indata.copy())
+            rms = float(np.sqrt(np.mean(indata ** 2)))
+            self._current_level = min(1.0, rms / 0.01)
+            # Shared level für Overlay direkt setzen
+            from overlay import set_shared_level
+            set_shared_level(self._current_level)
