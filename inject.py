@@ -5,8 +5,17 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Electron-Apps die keine Accessibility-Injection unterstützen
-ELECTRON_APPS = {"Slack", "Visual Studio Code", "Code", "Notion", "Discord", "Figma"}
+# Apps die keine zuverlässige Accessibility-Injection unterstützen
+# (Electron-Apps + Chromium-basierte Browser)
+CLIPBOARD_FALLBACK_APPS = {
+    # Electron
+    "Slack", "Visual Studio Code", "Code", "Notion", "Discord", "Figma",
+    # Chromium-basierte Browser
+    "Google Chrome", "Chromium", "Brave Browser", "Microsoft Edge",
+    "Opera", "Vivaldi", "Arc",
+    # Andere Browser (Safari unterstützt Accessibility meist korrekt)
+    "Firefox",
+}
 
 
 def inject_text(text: str, app_name: str, use_clipboard_fallback: bool = True) -> bool:
@@ -14,9 +23,9 @@ def inject_text(text: str, app_name: str, use_clipboard_fallback: bool = True) -
     if not text:
         return False
 
-    # Electron-Apps direkt über Clipboard
-    if use_clipboard_fallback and app_name in ELECTRON_APPS:
-        logger.info("Electron-App '%s' erkannt, nutze Clipboard-Fallback", app_name)
+    # Apps mit bekannten Accessibility-Problemen direkt über Clipboard
+    if use_clipboard_fallback and app_name in CLIPBOARD_FALLBACK_APPS:
+        logger.info("'%s' nutzt Clipboard-Fallback (bekanntes Accessibility-Problem)", app_name)
         return _clipboard_paste(text)
 
     # Accessibility API versuchen
