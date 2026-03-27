@@ -17,14 +17,16 @@
 | Post-Processing | Behält Umgangssprache bei, nur Satzzeichen + Whisper-Fehler |
 | Landing Page | `web/` — Next.js + Tailwind, live auf Vercel |
 | Chrome / Browser | Text-Injection via Clipboard-Fallback, funktioniert |
+| Terminal-Emulatoren | Text-Injection via Clipboard-Fallback, funktioniert |
 | Git | Alles committed + gepusht |
 | GitHub | **https://github.com/sahinelcoder/VoiceTool** (public) |
 | Vercel | **https://voicetool-app.vercel.app** |
 
 ## Was diese Session erledigt wurde
 
-- **Chrome-Bug bestätigt behoben** — `inject.py` hatte Chrome bereits in `CLIPBOARD_FALLBACK_APPS`, funktioniert
-- **Git-Status geprüft** — working tree clean, alle Änderungen der Vorsession bereits committed
+- **Chrome-Bug bestätigt behoben** — war bereits in `CLIPBOARD_FALLBACK_APPS`, funktioniert
+- **Terminal-Injection gefixt** — Terminal-Emulatoren zu `CLIPBOARD_FALLBACK_APPS` hinzugefügt
+- **Clipboard-Delay erhöht** — 0.1s → 0.5s, damit Chrome/Browser Cmd+V verarbeiten können bevor Clipboard wiederhergestellt wird
 
 ## Offene Aufgaben (nächste Session)
 
