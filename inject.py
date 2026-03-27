@@ -15,6 +15,8 @@ CLIPBOARD_FALLBACK_APPS = {
     "Opera", "Vivaldi", "Arc",
     # Andere Browser (Safari unterstützt Accessibility meist korrekt)
     "Firefox",
+    # Terminal-Emulatoren (kein AX-Textfeld, Cmd+V funktioniert)
+    "Terminal", "iTerm2", "iTerm", "Warp", "Hyper", "kitty",
 }
 
 
@@ -94,7 +96,7 @@ def _clipboard_paste(text: str) -> bool:
 
         # Cmd+V simulieren
         _simulate_cmd_v()
-        time.sleep(0.1)  # Kurz warten bis Paste verarbeitet ist
+        time.sleep(0.5)  # Warten bis Paste verarbeitet ist (Chrome braucht >0.1s)
 
         # Original wiederherstellen
         if original is not None:
